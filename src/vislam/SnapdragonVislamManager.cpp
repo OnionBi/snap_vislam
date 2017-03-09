@@ -273,3 +273,8 @@ int32_t Snapdragon::VislamManager::GetPose( mvVISLAMPose& pose, int64_t& pose_fr
   }
   return rc;
 }
+
+uint8_t* Snapdragon::VislamManager::GetFrameData()
+{
+  return cam_man_ptr_->GetFrameData();
+}

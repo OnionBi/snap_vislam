@@ -380,6 +380,7 @@ void Snapdragon::CameraManager::onPreviewFrame(camera::ICameraFrame* frame)
   else{
     WARN_PRINT( "Got duplicate image frame at timestamp: %lld frame_id: %llu", frame->timeStamp, next_frame_id_ );
   }
+  cur_frame_ = frame;
 }
 
 void Snapdragon::CameraManager::onVideoFrame(camera::ICameraFrame* frame)

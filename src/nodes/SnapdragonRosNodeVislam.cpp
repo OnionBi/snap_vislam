@@ -35,6 +35,8 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <geometry_msgs/Vector3.h>
+#include <sensor_msgs/Image.h>
+#include <image_transport/image_transport.h>
 #include <nav_msgs/Odometry.h>
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2_ros/transform_broadcaster.h>
@@ -44,6 +46,9 @@ Snapdragon::RosNode::Vislam::Vislam( ros::NodeHandle nh ) : nh_(nh)
 {
   pub_vislam_pose_ = nh_.advertise<geometry_msgs::PoseStamped>("vislam/pose",1);
   pub_vislam_odometry_ = nh_.advertise<nav_msgs::Odometry>("vislam/odometry",1);
+  pub_vislam_path_ = nh_.advertise<visualization_msgs::Marker>("vislam/path",1);
+  image_transport::ImageTransport it(nh_);
+  pub_vislam_image_ = it.advertise("/vislam/image",1);
   vislam_initialized_ = false;
   thread_started_ = false;
   thread_stop_ = false;
@@ -179,14 +184,16 @@ void Snapdragon::RosNode::Vislam::ThreadMain() {
   uint64_t timestamp_ns;
   thread_stop_ = false;
   int32_t vislam_ret;
+  uint8_t* frame_data;
   while( !thread_stop_ ) {
     vislam_ret = vislam_man.GetPose( vislamPose, vislamFrameId, timestamp_ns );
+    frame_data = vislam_man.GetFrameData();
     if( vislam_ret == 0 ) {
       //check if the pose quality is good.  If not do not publish the data.
       if( vislamPose.poseQuality != MV_TRACKING_STATE_FAILED  && 
           vislamPose.poseQuality != MV_TRACKING_STATE_INITIALIZING ) {
           // Publish Pose Data
-          PublishVislamData( vislamPose, vislamFrameId, timestamp_ns );
+          PublishVislamData( vislamPose, vislamFrameId, timestamp_ns, frame_data );
       }
     }
     else {
@@ -200,7 +207,7 @@ void Snapdragon::RosNode::Vislam::ThreadMain() {
   return;
 }
 
-int32_t Snapdragon::RosNode::Vislam::PublishVislamData( mvVISLAMPose& vislamPose, int64_t vislamFrameId, uint64_t timestamp_ns  ) {
+int32_t Snapdragon::RosNode::Vislam::PublishVislamData( mvVISLAMPose& vislamPose, int64_t vislamFrameId, uint64_t timestamp_ns, uint8_t* frame_data) {
   geometry_msgs::PoseStamped pose_msg;
   ros::Time frame_time;
   frame_time.sec = (int32_t)(timestamp_ns/100000000UL);
@@ -230,6 +237,30 @@ int32_t Snapdragon::RosNode::Vislam::PublishVislamData( mvVISLAMPose& vislamPose
   pose_msg.pose.orientation.z = q.getZ();
   pose_msg.pose.orientation.w = q.getW();
   pub_vislam_pose_.publish(pose_msg);
+  
+  //publish the trajectory message.
+  path.id = 0;
+  path.lifetime=ros::Duration(1);
+  path.header.frame_id = "vislam";
+  path.header.stamp = frame_time;
+  path.action = visualization_msgs::Marker::ADD;
+  path.type = visualization_msgs::Marker::LINE_STRIP;
+  path.color.r=1.0;
+  path.color.g=1.0; // yellow
+  path.color.a=1.0;
+  path.scale.x=0.001;
+  path.pose.orientation.w=1.0;
+
+  geometry_msgs::Point p;
+  p.x = pose_msg.pose.position.x;
+  p.y = pose_msg.pose.position.y;
+  p.z = pose_msg.pose.position.z;
+
+  path.points.push_back(p);
+  while(path.points.size()>path_length_)
+    path.points.erase(path.points.begin());
+
+  pub_vislam_path_.publish(path);
 
   //publish the odometry message.
   nav_msgs::Odometry odom_msg;
@@ -250,18 +281,31 @@ int32_t Snapdragon::RosNode::Vislam::PublishVislamData( mvVISLAMPose& vislamPose
     }
   }
   pub_vislam_odometry_.publish(odom_msg); 
+  
+  // get frame
+  sensor_msgs::Image img_msg;
+  cv::Mat img = cv::Mat(480, 640, CV_8UC1, frame_data);
+  cv_bridge::CvImage cvi;
+  cvi.header.stamp = ros::Time::now();
+  cvi.header.frame_id = "image";
+  cvi.image = img;
+  cvi.encoding = "mono8";
+  cvi.toImageMsg(img_msg);
+  img_msg.header.frame_id = "vislam";
+  img_msg.header.stamp = frame_time;
+  pub_vislam_image_.publish(img_msg);
 
   // compute transforms
   std::vector<geometry_msgs::TransformStamped> transforms;
   geometry_msgs::TransformStamped transform;
-  transform.transform.translation.x = pose_msg.pose.position.x;
-  transform.transform.translation.y = pose_msg.pose.position.y;
-  transform.transform.translation.z = pose_msg.pose.position.z;
-  transform.transform.rotation.x = pose_msg.pose.orientation.x;
-  transform.transform.rotation.y = pose_msg.pose.orientation.y;
-  transform.transform.rotation.z = pose_msg.pose.orientation.z;
-  transform.transform.rotation.w = pose_msg.pose.orientation.w;
-  transform.child_frame_id = "base_link_vislam";
+  transform.transform.translation.x = 0;
+  transform.transform.translation.y = 0;
+  transform.transform.translation.z = 0;
+  transform.transform.rotation.x = 1;
+  transform.transform.rotation.y = 0;
+  transform.transform.rotation.z = 0;
+  transform.transform.rotation.w = 0;
+  transform.child_frame_id = "my_vislam";
   transform.header.frame_id = "vislam";
   transform.header.stamp = frame_time;
 
@@ -270,6 +314,6 @@ int32_t Snapdragon::RosNode::Vislam::PublishVislamData( mvVISLAMPose& vislamPose
 
   // broadcast transforms
   static tf2_ros::TransformBroadcaster br;
-  br.sendTransform(transforms);     
+  br.sendTransform(transforms);
 }
 

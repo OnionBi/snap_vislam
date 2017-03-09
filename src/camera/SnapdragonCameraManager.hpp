@@ -177,6 +177,11 @@ public:
     return static_cast<float>(exposure_setting_) * camera_config_ptr_->row_period_us;
   }
 
+  inline uint8_t* GetFrameData()
+  {
+    return cur_frame_->data;
+  }
+
   //interface functions from the camera::ICameraListener
   virtual void onError();
   virtual void onPreviewFrame(camera::ICameraFrame* frame);
@@ -196,6 +201,8 @@ private: // class private data members.
   camera::ICameraDevice* camera_ptr_;
   camera::CameraParams   params_;
   camera::ImageSize      preview_size_;
+
+  camera::ICameraFrame*  cur_frame_;// added
 
   size_t   image_size_bytes_;
   int32_t  exposure_setting_;

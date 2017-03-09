@@ -6,9 +6,11 @@ project(snap_ros_examples)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   roscpp
+  image_transport
   rospy
   std_msgs
   tf2_ros
+  cv_bridge
 )
 
 ## System dependencies are found with CMake's conventions

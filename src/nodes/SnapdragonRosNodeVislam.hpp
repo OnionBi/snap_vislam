@@ -31,11 +31,18 @@
  ****************************************************************************/
 #include <ros/ros.h>
 
+#include <visualization_msgs/Marker.h>
+
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/transform_listener.h>
 #include <tf2_ros/buffer.h>
-
+#include <sensor_msgs/Image.h>
+#include <image_transport/image_transport.h>
 #include <mvVISLAM.h>
+#include <cv.h>
+#include <opencv2/core/core.hpp>
+#include <opencv2/opencv.hpp>
+#include <cv_bridge/cv_bridge.h>
 #include "SnapdragonVislamManager.hpp"
 
 /**
@@ -92,7 +99,7 @@ public:
 private: 
 
   // class methods
-  int32_t PublishVislamData( mvVISLAMPose& vislamPose, int64_t vislamFrameId, uint64_t timestamp_ns );
+  int32_t PublishVislamData( mvVISLAMPose& vislamPose, int64_t vislamFrameId, uint64_t timestamp_ns, uint8_t* frame_data);
   void ThreadMain();
 
   // data members;
@@ -103,5 +110,12 @@ private:
   ros::NodeHandle  nh_;
   ros::Publisher   pub_vislam_pose_;
   ros::Publisher   pub_vislam_odometry_;
+  
+  unsigned int     path_length_=1000;
+  visualization_msgs::Marker path;
+  ros::Publisher   pub_vislam_path_;
+  
+  image_transport::Publisher pub_vislam_image_;
+
   Snapdragon::VislamManager vislam_manager_;
 };
